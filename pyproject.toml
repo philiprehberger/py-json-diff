@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "philiprehberger-json-diff"
-version = "0.1.0"
+version = "0.1.1"
 description = "Readable JSON comparison with colorized terminal output"
 readme = "README.md"
 license = "MIT"
@@ -20,9 +20,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/philiprehberger/py-json-diff"
+Homepage = "https://github.com/philiprehberger/py-json-diff#readme"
 Repository = "https://github.com/philiprehberger/py-json-diff"
 Issues = "https://github.com/philiprehberger/py-json-diff/issues"
+Changelog = "https://github.com/philiprehberger/py-json-diff/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/philiprehberger_json_diff"]
