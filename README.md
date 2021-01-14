@@ -1,5 +1,9 @@
 # philiprehberger-json-diff
 
+[![Tests](https://github.com/philiprehberger/py-json-diff/actions/workflows/publish.yml/badge.svg)](https://github.com/philiprehberger/py-json-diff/actions/workflows/publish.yml)
+[![PyPI version](https://img.shields.io/pypi/v/philiprehberger-json-diff.svg)](https://pypi.org/project/philiprehberger-json-diff/)
+[![License](https://img.shields.io/github/license/philiprehberger/py-json-diff)](LICENSE)
+
 Readable JSON/dict comparison with colorized terminal output.
 
 ## Installation
