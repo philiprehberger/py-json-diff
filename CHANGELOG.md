@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 (2026-04-01)
+
+- Add `to_json_patch()` for RFC 6902 JSON Patch output with proper JSON Pointer escaping
+- Add `format_html()` for rendering diffs as HTML tables in web UIs
+- Add `ArrayStrategy` enum with `ORDER_SENSITIVE` and `ORDER_INSENSITIVE` modes
+- Add `array_strategy` parameter to `diff()` for order-insensitive array comparison
+
 ## 0.2.1 (2026-03-31)
 
 - Standardize README to 3-badge format with emoji Support section
