@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Fix tests to match actual API (change_type, old_value/new_value fields)
+
 ## 0.1.1
 
 - Add project URLs to pyproject.toml
