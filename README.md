@@ -52,6 +52,14 @@ changes = diff(old, new, ignore={"user.settings.theme"})
 - `format_diff(changes, color=True)` — Format changes as readable string with optional ANSI colors
 - `diff_summary(changes)` — Return dict with counts by change type
 
+
+## Development
+
+```bash
+pip install -e .
+python -m pytest tests/ -v
+```
+
 ## License
 
 MIT
