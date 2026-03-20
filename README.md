@@ -48,9 +48,11 @@ changes = diff(old, new, ignore={"user.settings.theme"})
 
 ## API
 
-- `diff(old, new, ignore=None)` — Compare two dicts, returns list of `Change` objects
-- `format_diff(changes, color=True)` — Format changes as readable string with optional ANSI colors
-- `diff_summary(changes)` — Return dict with counts by change type
+| Function / Class | Description |
+|------------------|-------------|
+| `diff(old, new, ignore=None)` | Compare two dicts, returns list of `Change` objects |
+| `format_diff(changes, color=True)` | Format changes as readable string with optional ANSI colors |
+| `diff_summary(changes)` | Return dict with counts by change type |
 
 
 ## Development
