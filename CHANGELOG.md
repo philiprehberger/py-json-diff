@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Add wildcard path ignore patterns (e.g. `*.metadata.*`) for ignoring fields at any depth
+- Add structural diff mode (`mode="structural"`) that separates key additions/removals from value/type changes
+- Add `apply_patch(target, changes)` function to apply a diff result as a patch
+
 ## 0.1.5
 
 - Add Development section to README
