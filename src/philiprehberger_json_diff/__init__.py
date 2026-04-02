@@ -6,17 +6,21 @@ import copy
 import fnmatch
 from dataclasses import dataclass
 from enum import Enum
+from html import escape as html_escape
 from typing import Any
 
 
 __all__ = [
-    "ChangeType",
+    "ArrayStrategy",
     "Change",
+    "ChangeType",
     "StructuralDiff",
-    "diff",
-    "format_diff",
-    "diff_summary",
     "apply_patch",
+    "diff",
+    "diff_summary",
+    "format_diff",
+    "format_html",
+    "to_json_patch",
 ]
 
 
@@ -27,6 +31,18 @@ class ChangeType(Enum):
     REMOVED = "removed"
     MODIFIED = "modified"
     UNCHANGED = "unchanged"
+
+
+class ArrayStrategy(Enum):
+    """Strategy for comparing arrays/lists.
+
+    ``ORDER_SENSITIVE`` (default) compares elements by index position.
+    ``ORDER_INSENSITIVE`` treats arrays as unordered collections and matches
+    by value equality, reporting the minimal set of additions and removals.
+    """
+
+    ORDER_SENSITIVE = "order_sensitive"
+    ORDER_INSENSITIVE = "order_insensitive"
 
 
 @dataclass(frozen=True)
@@ -54,6 +70,7 @@ def diff(
     b: Any,
     ignore: set[str] | list[str] | None = None,
     mode: str = "full",
+    array_strategy: ArrayStrategy = ArrayStrategy.ORDER_SENSITIVE,
     _path: str = "",
 ) -> list[Change] | StructuralDiff:
     """Compare two JSON-compatible objects and return a list of changes.
@@ -66,6 +83,9 @@ def diff(
         mode: ``"full"`` (default) returns a flat list of changes.
             ``"structural"`` returns a :class:`StructuralDiff` separating
             key additions/removals from value/type changes.
+        array_strategy: Strategy for comparing arrays. ``ORDER_SENSITIVE``
+            (default) compares by index. ``ORDER_INSENSITIVE`` treats arrays
+            as unordered collections.
         _path: Internal path prefix for recursion.
 
     Returns:
@@ -73,7 +93,7 @@ def diff(
         (``mode="structural"``).
     """
     ignore_set = set(ignore) if ignore else set()
-    changes = _diff_values(a, b, _path, ignore_set)
+    changes = _diff_values(a, b, _path, ignore_set, array_strategy)
 
     if mode == "structural":
         return _to_structural(changes)
@@ -104,15 +124,17 @@ def _should_ignore(path: str, ignore: set[str]) -> bool:
 
 
 def _diff_values(
-    a: Any, b: Any, path: str, ignore: set[str]
+    a: Any, b: Any, path: str, ignore: set[str], array_strategy: ArrayStrategy
 ) -> list[Change]:
     if _should_ignore(path, ignore):
         return []
 
     if isinstance(a, dict) and isinstance(b, dict):
-        return _diff_dicts(a, b, path, ignore)
+        return _diff_dicts(a, b, path, ignore, array_strategy)
     if isinstance(a, list) and isinstance(b, list):
-        return _diff_lists(a, b, path, ignore)
+        if array_strategy == ArrayStrategy.ORDER_INSENSITIVE:
+            return _diff_lists_unordered(a, b, path, ignore)
+        return _diff_lists(a, b, path, ignore, array_strategy)
 
     if a == b:
         return [Change(path=path, change_type=ChangeType.UNCHANGED, old_value=a, new_value=b)]
@@ -120,7 +142,8 @@ def _diff_values(
 
 
 def _diff_dicts(
-    a: dict[str, Any], b: dict[str, Any], path: str, ignore: set[str]
+    a: dict[str, Any], b: dict[str, Any], path: str, ignore: set[str],
+    array_strategy: ArrayStrategy,
 ) -> list[Change]:
     changes: list[Change] = []
     all_keys = sorted(set(a.keys()) | set(b.keys()))
@@ -136,13 +159,14 @@ def _diff_dicts(
         elif key not in b:
             changes.append(Change(path=child_path, change_type=ChangeType.REMOVED, old_value=a[key]))
         else:
-            changes.extend(_diff_values(a[key], b[key], child_path, ignore))
+            changes.extend(_diff_values(a[key], b[key], child_path, ignore, array_strategy))
 
     return changes
 
 
 def _diff_lists(
-    a: list[Any], b: list[Any], path: str, ignore: set[str]
+    a: list[Any], b: list[Any], path: str, ignore: set[str],
+    array_strategy: ArrayStrategy,
 ) -> list[Change]:
     changes: list[Change] = []
     max_len = max(len(a), len(b))
@@ -155,7 +179,45 @@ def _diff_lists(
         elif i >= len(b):
             changes.append(Change(path=child_path, change_type=ChangeType.REMOVED, old_value=a[i]))
         else:
-            changes.extend(_diff_values(a[i], b[i], child_path, ignore))
+            changes.extend(_diff_values(a[i], b[i], child_path, ignore, array_strategy))
+
+    return changes
+
+
+def _diff_lists_unordered(
+    a: list[Any], b: list[Any], path: str, ignore: set[str],
+) -> list[Change]:
+    """Compare two lists as unordered collections (set-like diff)."""
+    changes: list[Change] = []
+
+    # Track which items in b have been matched
+    b_remaining = list(range(len(b)))
+    a_matched: list[bool] = [False] * len(a)
+
+    # First pass: find exact matches
+    for i, a_item in enumerate(a):
+        for j_idx, j in enumerate(b_remaining):
+            if a_item == b[j]:
+                a_matched[i] = True
+                b_remaining.pop(j_idx)
+                break
+
+    # Unmatched items in a are removals
+    for i, item in enumerate(a):
+        if not a_matched[i]:
+            child_path = f"{path}[{i}]"
+            if not _should_ignore(child_path, ignore):
+                changes.append(Change(
+                    path=child_path, change_type=ChangeType.REMOVED, old_value=item,
+                ))
+
+    # Unmatched items in b are additions
+    for j in b_remaining:
+        child_path = f"{path}[{j}]"
+        if not _should_ignore(child_path, ignore):
+            changes.append(Change(
+                path=child_path, change_type=ChangeType.ADDED, new_value=b[j],
+            ))
 
     return changes
 
@@ -216,6 +278,61 @@ def format_diff(changes: list[Change], color: bool = True) -> str:
     return "\n".join(lines) if lines else "No changes"
 
 
+def format_html(changes: list[Change]) -> str:
+    """Format a list of changes as an HTML table for web UIs.
+
+    Args:
+        changes: List of Change objects from diff().
+
+    Returns:
+        An HTML string containing a ``<table>`` with change rows.
+        Added rows have class ``added``, removed rows ``removed``,
+        and modified rows ``modified``.
+    """
+    rows: list[str] = []
+    for change in changes:
+        match change.change_type:
+            case ChangeType.ADDED:
+                rows.append(
+                    f'<tr class="added">'
+                    f"<td>+</td>"
+                    f"<td>{html_escape(change.path)}</td>"
+                    f"<td></td>"
+                    f"<td>{html_escape(_fmt(change.new_value))}</td>"
+                    f"</tr>"
+                )
+            case ChangeType.REMOVED:
+                rows.append(
+                    f'<tr class="removed">'
+                    f"<td>-</td>"
+                    f"<td>{html_escape(change.path)}</td>"
+                    f"<td>{html_escape(_fmt(change.old_value))}</td>"
+                    f"<td></td>"
+                    f"</tr>"
+                )
+            case ChangeType.MODIFIED:
+                rows.append(
+                    f'<tr class="modified">'
+                    f"<td>~</td>"
+                    f"<td>{html_escape(change.path)}</td>"
+                    f"<td>{html_escape(_fmt(change.old_value))}</td>"
+                    f"<td>{html_escape(_fmt(change.new_value))}</td>"
+                    f"</tr>"
+                )
+            case ChangeType.UNCHANGED:
+                pass
+
+    header = (
+        "<table>"
+        "<thead><tr>"
+        "<th>Op</th><th>Path</th><th>Old</th><th>New</th>"
+        "</tr></thead>"
+        "<tbody>"
+    )
+    footer = "</tbody></table>"
+    return header + "".join(rows) + footer
+
+
 def _fmt(value: Any) -> str:
     if isinstance(value, str):
         return f'"{value}"'
@@ -239,6 +356,67 @@ def diff_summary(changes: list[Change]) -> dict[str, int]:
     for change in changes:
         summary[change.change_type.value] += 1
     return summary
+
+
+# ---------------------------------------------------------------------------
+# RFC 6902 JSON Patch
+# ---------------------------------------------------------------------------
+
+
+def _path_to_json_pointer(path: str) -> str:
+    """Convert a dot-path with bracket indices to a JSON Pointer (RFC 6901).
+
+    Examples:
+        ``"user.name"`` -> ``"/user/name"``
+        ``"items[0].name"`` -> ``"/items/0/name"``
+    """
+    segments = _parse_path(path)
+    escaped: list[str] = []
+    for seg in segments:
+        s = str(seg)
+        # JSON Pointer escaping: ~ -> ~0, / -> ~1
+        s = s.replace("~", "~0").replace("/", "~1")
+        escaped.append(s)
+    return "/" + "/".join(escaped) if escaped else ""
+
+
+def to_json_patch(changes: list[Change]) -> list[dict[str, Any]]:
+    """Convert a list of changes to RFC 6902 JSON Patch format.
+
+    Args:
+        changes: List of Change objects from diff().
+
+    Returns:
+        A list of JSON Patch operation dicts. Each dict has an ``op`` key
+        (``"add"``, ``"remove"``, or ``"replace"``) and a ``path`` key
+        in JSON Pointer format. ``"add"`` and ``"replace"`` operations
+        include a ``value`` key.
+
+    Example::
+
+        patch = to_json_patch(diff(old, new))
+        # [{"op": "replace", "path": "/age", "value": 31}, ...]
+    """
+    ops: list[dict[str, Any]] = []
+
+    for change in changes:
+        pointer = _path_to_json_pointer(change.path)
+        match change.change_type:
+            case ChangeType.ADDED:
+                ops.append({"op": "add", "path": pointer, "value": change.new_value})
+            case ChangeType.REMOVED:
+                ops.append({"op": "remove", "path": pointer})
+            case ChangeType.MODIFIED:
+                ops.append({"op": "replace", "path": pointer, "value": change.new_value})
+            case ChangeType.UNCHANGED:
+                pass
+
+    return ops
+
+
+# ---------------------------------------------------------------------------
+# apply_patch
+# ---------------------------------------------------------------------------
 
 
 def apply_patch(target: Any, changes: list[Change]) -> Any:
