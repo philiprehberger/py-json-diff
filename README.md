@@ -62,6 +62,25 @@ new = {"a": {"metadata": {"ts": 99}}, "b": {"metadata": {"ts": 99}}}
 changes = diff(old, new, ignore={"*.metadata.*"})
 ```
 
+### Filter by paths
+
+```python
+from philiprehberger_json_diff import diff_paths
+
+old = {
+    "users": {"alice": {"email": "a@old.com"}, "bob": {"email": "b@old.com"}},
+    "config": {"timeout": 30, "retries": 3},
+}
+new = {
+    "users": {"alice": {"email": "a@new.com"}, "bob": {"email": "b@new.com"}},
+    "config": {"timeout": 60, "retries": 3},
+}
+
+# Watch only specific subtrees — wildcards work just like ignore patterns
+changes = diff_paths(old, new, ["users.*.email", "config.timeout"])
+# Reports: users.alice.email, users.bob.email, config.timeout
+```
+
 ### Structural Diff Mode
 
 ```python
@@ -137,6 +156,7 @@ html = format_html(changes)
 | Function / Class | Description |
 |------------------|-------------|
 | `diff(a, b, ignore, mode, array_strategy)` | Compare two dicts/lists, returns list of `Change` objects or `StructuralDiff` |
+| `diff_paths(a, b, paths, *, array_strategy)` | Compare two dicts/lists and return only changes matching the supplied glob-style path patterns |
 | `format_diff(changes, color)` | Format changes as readable string with optional ANSI colors |
 | `format_html(changes)` | Format changes as an HTML table for web UIs |
 | `diff_summary(changes)` | Return dict with counts by change type |

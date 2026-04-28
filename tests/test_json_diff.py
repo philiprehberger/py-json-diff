@@ -5,6 +5,7 @@ from philiprehberger_json_diff import (
     StructuralDiff,
     apply_patch,
     diff,
+    diff_paths,
     diff_summary,
     format_diff,
     format_html,
@@ -497,3 +498,90 @@ def test_ignore_multiple_paths():
     changes = diff(old, new, ignore={"a", "c"})
     assert len(changes) == 1
     assert changes[0].path == "b"
+
+
+# ---------------------------------------------------------------------------
+# diff_paths
+# ---------------------------------------------------------------------------
+
+
+class TestDiffPaths:
+    def test_exact_path_match_returns_just_that_change(self):
+        old = {"a": 1, "b": 2, "c": 3}
+        new = {"a": 10, "b": 20, "c": 30}
+        changes = diff_paths(old, new, ["b"])
+        assert len(changes) == 1
+        assert changes[0].path == "b"
+        assert changes[0].change_type == ChangeType.MODIFIED
+
+    def test_wildcard_match_returns_multiple_changes(self):
+        old = {
+            "users": {
+                "alice": {"email": "alice@old.com", "name": "Alice"},
+                "bob": {"email": "bob@old.com", "name": "Bob"},
+            }
+        }
+        new = {
+            "users": {
+                "alice": {"email": "alice@new.com", "name": "Alice"},
+                "bob": {"email": "bob@new.com", "name": "Bob"},
+            }
+        }
+        changes = diff_paths(old, new, ["users.*.email"])
+        assert len(changes) == 2
+        paths = {c.path for c in changes}
+        assert paths == {"users.alice.email", "users.bob.email"}
+
+    def test_multiple_patterns_are_unioned(self):
+        old = {
+            "users": {"alice": {"email": "a@old.com"}},
+            "config": {"timeout": 30, "retries": 3},
+        }
+        new = {
+            "users": {"alice": {"email": "a@new.com"}},
+            "config": {"timeout": 60, "retries": 3},
+        }
+        changes = diff_paths(old, new, ["users.*.email", "config.timeout"])
+        paths = {c.path for c in changes}
+        assert paths == {"users.alice.email", "config.timeout"}
+
+    def test_empty_paths_returns_empty_list(self):
+        old = {"a": 1}
+        new = {"a": 2}
+        assert diff_paths(old, new, []) == []
+
+    def test_non_matching_pattern_returns_empty_list(self):
+        old = {"a": 1, "b": 2}
+        new = {"a": 10, "b": 20}
+        assert diff_paths(old, new, ["nonexistent.path"]) == []
+
+    def test_changes_outside_watched_paths_are_excluded(self):
+        old = {
+            "users": {"alice": {"email": "a@old.com", "name": "Alice"}},
+            "other": {"foo": 1},
+        }
+        new = {
+            "users": {"alice": {"email": "a@new.com", "name": "Alicia"}},
+            "other": {"foo": 99},
+        }
+        changes = diff_paths(old, new, ["users.*.email"])
+        assert len(changes) == 1
+        assert changes[0].path == "users.alice.email"
+
+    def test_accepts_iterable_not_just_list(self):
+        old = {"a": 1}
+        new = {"a": 2}
+        # Generator is a one-shot iterable; diff_paths should still work.
+        changes = diff_paths(old, new, (p for p in ["a"]))
+        assert len(changes) == 1
+        assert changes[0].path == "a"
+
+    def test_array_strategy_passthrough(self):
+        old = {"items": [1, 2, 3]}
+        new = {"items": [3, 2, 1]}
+        # Order-sensitive default would produce changes at items[0]/items[2].
+        # Order-insensitive should produce no changes.
+        changes = diff_paths(
+            old, new, ["items*"], array_strategy=ArrayStrategy.ORDER_INSENSITIVE,
+        )
+        assert changes == []

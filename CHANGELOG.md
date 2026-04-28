@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0 (2026-04-27)
+
+- Add `diff_paths(a, b, paths)` returning only changes matching glob-style path patterns (e.g. `users.*.email`)
+
 ## 0.3.0 (2026-04-01)
 
 - Add `to_json_patch()` for RFC 6902 JSON Patch output with proper JSON Pointer escaping

@@ -7,7 +7,7 @@ import fnmatch
 from dataclasses import dataclass
 from enum import Enum
 from html import escape as html_escape
-from typing import Any
+from typing import Any, Iterable
 
 
 __all__ = [
@@ -17,6 +17,7 @@ __all__ = [
     "StructuralDiff",
     "apply_patch",
     "diff",
+    "diff_paths",
     "diff_summary",
     "format_diff",
     "format_html",
@@ -356,6 +357,46 @@ def diff_summary(changes: list[Change]) -> dict[str, int]:
     for change in changes:
         summary[change.change_type.value] += 1
     return summary
+
+
+def diff_paths(
+    a: Any,
+    b: Any,
+    paths: Iterable[str],
+    *,
+    array_strategy: ArrayStrategy = ArrayStrategy.ORDER_SENSITIVE,
+) -> list[Change]:
+    """Return changes whose path matches one of the supplied glob-style patterns.
+
+    Reuses the same wildcard semantics as ``ignore_paths`` in :func:`diff`.
+    Useful for monitoring specific subtrees in large documents (e.g.
+    ``users.*.email``) without scanning unrelated branches.
+
+    Args:
+        a: The original object.
+        b: The new object.
+        paths: Iterable of dot-path keys or wildcard patterns to keep.
+        array_strategy: Strategy for comparing arrays.
+
+    Returns:
+        List of Change objects whose ``path`` matches at least one supplied
+        pattern. Returns ``[]`` if ``paths`` is empty.
+    """
+    pattern_list = list(paths)
+    if not pattern_list:
+        return []
+
+    pattern_set = set(pattern_list)
+    all_changes = diff(a, b, array_strategy=array_strategy)
+    # diff() returns list[Change] when mode is "full" (the default)
+    assert isinstance(all_changes, list)
+
+    return [
+        change
+        for change in all_changes
+        if change.change_type != ChangeType.UNCHANGED
+        and _should_ignore(change.path, pattern_set)
+    ]
 
 
 # ---------------------------------------------------------------------------
