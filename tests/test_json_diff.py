@@ -1,8 +1,11 @@
+import pytest
+
 from philiprehberger_json_diff import (
     ArrayStrategy,
     Change,
     ChangeType,
     StructuralDiff,
+    apply_json_patch,
     apply_patch,
     diff,
     diff_paths,
@@ -585,3 +588,57 @@ class TestDiffPaths:
             old, new, ["items*"], array_strategy=ArrayStrategy.ORDER_INSENSITIVE,
         )
         assert changes == []
+
+
+# ---------------------------------------------------------------------------
+# apply_json_patch (RFC 6902)
+# ---------------------------------------------------------------------------
+
+
+class TestApplyJsonPatch:
+    def test_round_trip_simple(self):
+        old = {"a": 1, "b": 2}
+        new = {"a": 10, "c": 3}
+        ops = to_json_patch(diff(old, new))
+        assert apply_json_patch(old, ops) == new
+
+    def test_round_trip_nested(self):
+        old = {"user": {"name": "Alice", "age": 30}, "active": True}
+        new = {"user": {"name": "Bob", "age": 31}, "active": True}
+        ops = to_json_patch(diff(old, new))
+        assert apply_json_patch(old, ops) == new
+
+    def test_round_trip_array(self):
+        old = {"items": [1, 2, 3]}
+        new = {"items": [1, 20, 3]}
+        ops = to_json_patch(diff(old, new))
+        assert apply_json_patch(old, ops) == new
+
+    def test_does_not_mutate_target(self):
+        old = {"a": 1}
+        ops = [{"op": "replace", "path": "/a", "value": 2}]
+        apply_json_patch(old, ops)
+        assert old == {"a": 1}
+
+    def test_handles_escaped_pointers(self):
+        ops = [{"op": "replace", "path": "/a~1b", "value": 2}]
+        result = apply_json_patch({"a/b": 1}, ops)
+        assert result == {"a/b": 2}
+
+    def test_remove_op(self):
+        result = apply_json_patch({"a": 1, "b": 2}, [{"op": "remove", "path": "/b"}])
+        assert result == {"a": 1}
+
+    def test_add_op(self):
+        result = apply_json_patch({"a": 1}, [{"op": "add", "path": "/b", "value": 2}])
+        assert result == {"a": 1, "b": 2}
+
+    def test_unknown_op_raises(self):
+        with pytest.raises(ValueError):
+            apply_json_patch({}, [{"op": "move", "path": "/a", "from": "/b"}])
+
+    def test_empty_ops_returns_copy(self):
+        target = {"a": 1}
+        result = apply_json_patch(target, [])
+        assert result == target
+        assert result is not target

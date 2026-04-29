@@ -123,6 +123,11 @@ patch = to_json_patch(diff(old, new))
 #   {"op": "replace", "path": "/name", "value": "Bob"},
 #   {"op": "add", "path": "/active", "value": True},
 # ]
+
+# Round-trip: apply the patch to reconstruct `new` from `old`
+from philiprehberger_json_diff import apply_json_patch
+
+apply_json_patch(old, patch) == new  # True
 ```
 
 ### Array Diff Strategies
@@ -161,6 +166,7 @@ html = format_html(changes)
 | `format_html(changes)` | Format changes as an HTML table for web UIs |
 | `diff_summary(changes)` | Return dict with counts by change type |
 | `to_json_patch(changes)` | Convert changes to RFC 6902 JSON Patch format |
+| `apply_json_patch(target, ops)` | Apply RFC 6902 ops (`add`/`remove`/`replace`) to a target — inverse of `to_json_patch` |
 | `apply_patch(target, changes)` | Apply a diff result as a patch to reconstruct the modified object |
 | `Change` | Dataclass with `path`, `change_type`, `old_value`, `new_value` |
 | `ChangeType` | Enum: `ADDED`, `REMOVED`, `MODIFIED`, `UNCHANGED` |

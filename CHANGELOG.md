@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 (2026-04-28)
+
+- Add `apply_json_patch(target, ops)` — inverse of `to_json_patch()`. Applies RFC 6902 `add`/`remove`/`replace` operations to reconstruct the target, completing the diff → JSON Patch → apply round-trip
+- Properly unescapes JSON Pointer segments (`~0` → `~`, `~1` → `/`)
+
 ## 0.4.0 (2026-04-27)
 
 - Add `diff_paths(a, b, paths)` returning only changes matching glob-style path patterns (e.g. `users.*.email`)

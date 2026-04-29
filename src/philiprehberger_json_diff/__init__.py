@@ -15,6 +15,7 @@ __all__ = [
     "Change",
     "ChangeType",
     "StructuralDiff",
+    "apply_json_patch",
     "apply_patch",
     "diff",
     "diff_paths",
@@ -453,6 +454,84 @@ def to_json_patch(changes: list[Change]) -> list[dict[str, Any]]:
                 pass
 
     return ops
+
+
+def _json_pointer_to_segments(pointer: str) -> list[str]:
+    """Parse a JSON Pointer (RFC 6901) into raw string segments."""
+    if pointer == "":
+        return []
+    if not pointer.startswith("/"):
+        raise ValueError(f"Invalid JSON Pointer: {pointer!r}")
+    segments: list[str] = []
+    for raw in pointer[1:].split("/"):
+        # Unescape: ~1 -> /, ~0 -> ~  (order matters)
+        segments.append(raw.replace("~1", "/").replace("~0", "~"))
+    return segments
+
+
+def _resolve_pointer_parent(target: Any, segments: list[str]) -> tuple[Any, str | int]:
+    """Walk *target* down to the parent of the last segment and return (parent, last_key)."""
+    if not segments:
+        raise ValueError("Cannot operate on root pointer")
+    parent: Any = target
+    for seg in segments[:-1]:
+        if isinstance(parent, list):
+            parent = parent[int(seg)]
+        else:
+            parent = parent[seg]
+    last_raw = segments[-1]
+    if isinstance(parent, list):
+        return parent, int(last_raw)
+    return parent, last_raw
+
+
+def apply_json_patch(target: Any, ops: list[dict[str, Any]]) -> Any:
+    """Apply RFC 6902 JSON Patch operations to a target object.
+
+    Inverse of :func:`to_json_patch`. Supports ``add``, ``remove``, and
+    ``replace`` ops (the operations that :func:`to_json_patch` produces).
+
+    Args:
+        target: The base object to patch (will not be mutated).
+        ops: A list of JSON Patch operation dicts, each with ``op``,
+            ``path``, and (for add/replace) ``value`` keys.
+
+    Returns:
+        A new object with all operations applied.
+
+    Raises:
+        ValueError: If an op has an unsupported ``op`` field or invalid pointer.
+        KeyError / IndexError: If a path does not exist for a remove/replace op.
+    """
+    result = copy.deepcopy(target)
+
+    for op in ops:
+        op_name = op.get("op")
+        path = op.get("path", "")
+        segments = _json_pointer_to_segments(path)
+
+        if not segments:
+            if op_name in ("add", "replace"):
+                result = copy.deepcopy(op["value"])
+                continue
+            raise ValueError(f"Cannot apply {op_name!r} to root")
+
+        parent, key = _resolve_pointer_parent(result, segments)
+
+        if op_name == "add":
+            if isinstance(parent, list):
+                idx = key if isinstance(key, int) else int(key)
+                parent.insert(idx, copy.deepcopy(op["value"]))
+            else:
+                parent[key] = copy.deepcopy(op["value"])
+        elif op_name == "replace":
+            parent[key] = copy.deepcopy(op["value"])
+        elif op_name == "remove":
+            del parent[key]
+        else:
+            raise ValueError(f"Unsupported JSON Patch op: {op_name!r}")
+
+    return result
 
 
 # ---------------------------------------------------------------------------
