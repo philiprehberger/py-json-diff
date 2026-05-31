@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 (2026-05-30)
+
+- Add `diff_count()` for the change count between two structures
+- Add `has_changes()` short-circuit "are these different?" check (both accept the same kwargs as `diff()`)
+
 ## 0.5.0 (2026-04-28)
 
 - Add `apply_json_patch(target, ops)` — inverse of `to_json_patch()`. Applies RFC 6902 `add`/`remove`/`replace` operations to reconstruct the target, completing the diff → JSON Patch → apply round-trip

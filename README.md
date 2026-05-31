@@ -146,6 +146,22 @@ changes = diff(old, new, array_strategy=ArrayStrategy.ORDER_INSENSITIVE)
 # No changes reported — same elements, different order
 ```
 
+### Counting changes
+
+```python
+from philiprehberger_json_diff import diff_count, has_changes
+
+old = {"name": "Alice", "age": 30}
+new = {"name": "Alice", "age": 31, "city": "NYC"}
+
+diff_count(old, new)       # 2  (one modify, one add)
+has_changes(old, new)      # True
+has_changes(old, old)      # False
+
+# Both wrappers accept the same kwargs as diff(), including ignore patterns
+has_changes(old, new, ignore={"age", "city"})  # False
+```
+
 ### HTML Output
 
 ```python
@@ -165,6 +181,8 @@ html = format_html(changes)
 | `format_diff(changes, color)` | Format changes as readable string with optional ANSI colors |
 | `format_html(changes)` | Format changes as an HTML table for web UIs |
 | `diff_summary(changes)` | Return dict with counts by change type |
+| `diff_count(a, b, **kwargs)` | Return the number of changes between `a` and `b` (accepts the same kwargs as `diff()`) |
+| `has_changes(a, b, **kwargs)` | Return `True` if `a` and `b` differ (accepts the same kwargs as `diff()`) |
 | `to_json_patch(changes)` | Convert changes to RFC 6902 JSON Patch format |
 | `apply_json_patch(target, ops)` | Apply RFC 6902 ops (`add`/`remove`/`replace`) to a target — inverse of `to_json_patch` |
 | `apply_patch(target, changes)` | Apply a diff result as a patch to reconstruct the modified object |

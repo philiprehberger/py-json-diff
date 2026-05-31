@@ -8,10 +8,12 @@ from philiprehberger_json_diff import (
     apply_json_patch,
     apply_patch,
     diff,
+    diff_count,
     diff_paths,
     diff_summary,
     format_diff,
     format_html,
+    has_changes,
     to_json_patch,
 )
 
@@ -642,3 +644,41 @@ class TestApplyJsonPatch:
         result = apply_json_patch(target, [])
         assert result == target
         assert result is not target
+
+
+# ---------------------------------------------------------------------------
+# diff_count / has_changes
+# ---------------------------------------------------------------------------
+
+
+class TestDiffCount:
+    def test_identical_dicts_returns_zero(self):
+        assert diff_count({"a": 1}, {"a": 1}) == 0
+
+    def test_single_modification(self):
+        assert diff_count({"a": 1}, {"a": 2}) == 1
+
+    def test_mixed_modify_and_add(self):
+        assert diff_count(
+            {"a": 1, "b": 2}, {"a": 1, "b": 3, "c": 4},
+        ) == 2
+
+    def test_identical_lists_returns_zero(self):
+        assert diff_count([1, 2, 3], [1, 2, 3]) == 0
+
+    def test_passes_kwargs_to_diff(self):
+        # ignore kwarg is honored by the wrapper
+        assert diff_count(
+            {"a": 1, "b": 2}, {"a": 10, "b": 2}, ignore=["a"],
+        ) == 0
+
+
+class TestHasChanges:
+    def test_identical_returns_false(self):
+        assert has_changes({"a": 1}, {"a": 1}) is False
+
+    def test_different_returns_true(self):
+        assert has_changes({"a": 1}, {"a": 2}) is True
+
+    def test_ignore_kwarg_honored(self):
+        assert has_changes({"a": 1}, {"a": 2}, ignore=["a"]) is False

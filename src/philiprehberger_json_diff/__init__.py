@@ -18,10 +18,12 @@ __all__ = [
     "apply_json_patch",
     "apply_patch",
     "diff",
+    "diff_count",
     "diff_paths",
     "diff_summary",
     "format_diff",
     "format_html",
+    "has_changes",
     "to_json_patch",
 ]
 
@@ -358,6 +360,27 @@ def diff_summary(changes: list[Change]) -> dict[str, int]:
     for change in changes:
         summary[change.change_type.value] += 1
     return summary
+
+
+def diff_count(a: Any, b: Any, **kwargs: Any) -> int:
+    """Return the number of changes between *a* and *b*.
+
+    Convenience wrapper over diff(); accepts all the same kwargs
+    (ignore, array_strategy, etc.). ``UNCHANGED`` entries are excluded
+    from the count.
+    """
+    changes = diff(a, b, **kwargs)
+    assert isinstance(changes, list)
+    return sum(1 for c in changes if c.change_type != ChangeType.UNCHANGED)
+
+
+def has_changes(a: Any, b: Any, **kwargs: Any) -> bool:
+    """Return True when *a* and *b* differ.
+
+    Equivalent to ``diff_count(a, b, **kwargs) > 0``. Useful as a quick
+    inequality check that accepts the same options as diff().
+    """
+    return diff_count(a, b, **kwargs) > 0
 
 
 def diff_paths(
